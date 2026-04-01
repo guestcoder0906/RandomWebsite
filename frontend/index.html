@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RandomWeb — Discover Random Websites from Across the Internet</title>
+  <meta name="description" content="Explore the web randomly. RandomWeb discovers, indexes, and validates websites from across the entire internet. Click and go anywhere.">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta property="og:title" content="RandomWeb — Discover Random Websites">
+  <meta property="og:description" content="One click. One random website. Explore the entire internet.">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Animated background -->
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="app">
+
+    <!-- ─── Header ──────────────────────────────── -->
+    <header class="header fade-in">
+      <div class="container">
+        <a href="/" class="logo" id="logo-link">
+          <div class="logo-icon">🌐</div>
+          <span class="logo-text">RandomWeb</span>
+        </a>
+        <div class="header-stats">
+          <span class="pulse-dot"></span>
+          <span id="header-active-count">—</span> sites indexed
+        </div>
+      </div>
+    </header>
+
+    <!-- ─── Main Content ────────────────────────── -->
+    <main>
+
+      <!-- Hero Section -->
+      <section class="hero">
+        <div class="container">
+          <div class="hero-badge slide-up">
+            <span class="dot"></span>
+            <span>Live — Indexing the web in real-time</span>
+          </div>
+
+          <h1 class="slide-up slide-up-delay-1">
+            Discover the<br>
+            <span class="gradient-text">Entire Web</span>
+          </h1>
+
+          <p class="slide-up slide-up-delay-2">
+            One click takes you to a random website from our ever-growing index. 
+            Powered by Certificate Transparency logs, Common Crawl, and recursive crawling.
+          </p>
+
+          <div class="random-btn-wrapper slide-up slide-up-delay-3">
+            <button class="random-btn" id="random-btn" type="button">
+              <span class="btn-icon">🎲</span>
+              <span class="btn-text">Take Me Somewhere Random</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Search Section -->
+      <section class="search-section slide-up slide-up-delay-3">
+        <div class="container">
+          <div class="glass-card" style="padding: var(--space-xl);">
+            <h2>🔍 Search the Index</h2>
+            <div class="search-box">
+              <span class="search-icon">⌕</span>
+              <input
+                type="text"
+                id="search-input"
+                placeholder="Search for websites... (e.g., github.com, news)"
+                autocomplete="off"
+                spellcheck="false"
+              >
+            </div>
+            <div class="search-results" id="search-results"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Submit Section -->
+      <section class="submit-section slide-up slide-up-delay-4">
+        <div class="container">
+          <div class="glass-card" style="padding: var(--space-xl);">
+            <h2>➕ Submit a Website</h2>
+            <p class="subtitle">
+              Know a website that's not in our index? Submit it and we'll validate and add it.
+            </p>
+            <form class="submit-form" id="submit-form">
+              <input
+                type="text"
+                id="submit-input"
+                placeholder="Enter a URL (e.g., https://example.com)"
+                autocomplete="off"
+                spellcheck="false"
+                required
+              >
+              <button type="submit" class="submit-btn" id="submit-btn">
+                Submit URL
+              </button>
+            </form>
+            <div class="submit-feedback" id="submit-feedback"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ─── Footer ──────────────────────────────── -->
+    <footer class="footer">
+      <div class="container">
+
+        <div class="live-counter">
+          <div class="counter-label">
+            <span class="live-dot"></span>
+            Active Websites Indexed
+          </div>
+          <div class="counter-value" id="counter-value">0</div>
+          <div class="counter-subtext">
+            and growing every second
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <a href="https://github.com/guestcoder0906/RandomWeb" target="_blank" rel="noopener">GitHub</a>
+          <span class="divider"></span>
+          <span style="color: var(--text-muted);">Built with 🌐 by RandomWeb</span>
+        </div>
+
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Supabase Client (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <!-- App Logic -->
+  <script src="app.js"></script>
+
+</body>
+</html>
