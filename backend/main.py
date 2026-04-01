@@ -1,5 +1,5 @@
 """
-RandomWeb — Main Application
+WebRoulette — Main Application
 FastAPI app with background workers for URL discovery, validation, and re-verification.
 """
 import asyncio
@@ -24,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("randomweb")
+logger = logging.getLogger("webroulette")
 
 
 async def seed_top_websites():
@@ -39,7 +39,7 @@ async def seed_top_websites():
 async def lifespan(app: FastAPI):
     """Manage background workers lifecycle."""
     logger.info("=" * 60)
-    logger.info("RandomWeb starting up")
+    logger.info("WebRoulette starting up")
     logger.info("Supabase URL: %s", SUPABASE_URL)
     logger.info("Secret key configured: %s", "Yes" if SUPABASE_SECRET_KEY else "No")
     logger.info("=" * 60)
@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
 
 # ─── FastAPI App ─────────────────────────────────────────────
 app = FastAPI(
-    title="RandomWeb",
+    title="WebRoulette",
     description="Discover random websites from across the internet",
     version="1.0.0",
     lifespan=lifespan,

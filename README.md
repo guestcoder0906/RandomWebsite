@@ -1,5 +1,5 @@
 ---
-title: RandomWeb
+title: WebRoulette
 emoji: 🌐
 colorFrom: blue
 colorTo: purple
@@ -8,7 +8,7 @@ app_port: 7860
 pinned: true
 ---
 
-# 🌐 RandomWeb — Discover Random Websites
+# 🌐 WebRoulette — Discover Random Websites
 
 A random website discovery platform that indexes the entire web using:
 
@@ -33,4 +33,4 @@ A random website discovery platform that indexes the entire web using:
 
 ## Links
 
-- [GitHub Repository](https://github.com/guestcoder0906/RandomWeb)
+- [GitHub Repository](https://github.com/guestcoder0906/RandomWebsite)
