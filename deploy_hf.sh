@@ -2,8 +2,8 @@
 
 # Configuration: Update these values
 # ==========================================
-HF_USERNAME="PinkAlpaca"
-SPACE_NAME="RandomWeb"
+HF_USERNAME="GarfieldQuality"
+SPACE_NAME="WebRoulette"
 # ==========================================
 
 # Colors for output
