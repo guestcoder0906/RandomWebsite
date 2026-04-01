@@ -18,6 +18,7 @@ from backend.db import (
 )
 from backend.config import SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY
 from backend.workers.validator import enqueue_url
+from backend.nsfw_filter import is_nsfw_url
 
 logger = logging.getLogger("randomweb.api")
 router = APIRouter(prefix="/api")
@@ -73,13 +74,17 @@ class SearchResult(BaseModel):
 @router.get("/random", response_model=RandomResponse)
 async def get_random():
     """Get a random active website URL for redirect."""
-    url = get_random_active_url()
-    if not url:
-        raise HTTPException(
-            status_code=404,
-            detail="No active websites found yet. The system is still indexing.",
-        )
-    return {"url": url}
+    # Try up to 10 times to find a non-NSFW result
+    for _ in range(10):
+        url = get_random_active_url()
+        if not url:
+            break
+        if not is_nsfw_url(url):
+            return {"url": url}
+    raise HTTPException(
+        status_code=404,
+        detail="No active websites found yet. The system is still indexing.",
+    )
 
 
 @router.get("/search", response_model=list[SearchResult])
@@ -89,7 +94,8 @@ async def search(
 ):
     """Search for indexed websites by URL or domain."""
     results = search_websites(q, limit=limit)
-    return results
+    # Filter out any NSFW results that might have slipped into the database
+    return [r for r in results if not is_nsfw_url(r["url"])]
 
 
 @router.post("/submit", response_model=SubmitResponse)
@@ -97,6 +103,13 @@ async def submit_url(request: SubmitRequest):
     """Submit a new URL for validation and indexing."""
     url = request.url
     logger.info("User submitted URL: %s", url)
+
+    # Reject NSFW URLs
+    if is_nsfw_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="This URL is on our blocklist and cannot be indexed.",
+        )
 
     # Check if already indexed
     if url_exists(url):

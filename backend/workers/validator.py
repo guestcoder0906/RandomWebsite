@@ -22,6 +22,7 @@ from backend.config import (
     RECHECK_INTERVAL_DAYS,
 )
 from backend.db import get_client, extract_domain
+from backend.nsfw_filter import is_nsfw_url
 
 logger = logging.getLogger("randomweb.validator")
 
@@ -37,7 +38,11 @@ def get_validation_queue() -> asyncio.Queue:
 
 
 async def enqueue_url(url: str, source: str = "unknown"):
-    """Add a URL to the validation queue."""
+    """Add a URL to the validation queue (rejects NSFW domains)."""
+    # Block NSFW domains at the earliest point
+    if is_nsfw_url(url):
+        return
+
     try:
         _validation_queue.put_nowait({"url": url, "source": source})
     except asyncio.QueueFull:
