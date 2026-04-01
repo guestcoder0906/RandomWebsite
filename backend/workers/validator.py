@@ -22,7 +22,7 @@ from backend.config import (
     RECHECK_INTERVAL_DAYS,
 )
 from backend.db import get_client, extract_domain
-from backend.nsfw_filter import is_nsfw_url
+from backend.nsfw_filter import is_nsfw_url, has_adult_meta_tags
 
 logger = logging.getLogger("randomweb.validator")
 
@@ -117,7 +117,8 @@ async def validate_url(
     Steps:
       1. Check robots.txt
       2. Send HEAD request (fallback to GET)
-      3. Return result with status
+      3. Check for adult content meta tags
+      4. Return result with status
     """
     domain = extract_domain(url)
     limiter = _get_domain_limiter(domain)
@@ -136,6 +137,7 @@ async def validate_url(
 
         now = datetime.now(timezone.utc).isoformat()
         status_code = None
+        page_html = None
 
         try:
             # Try HEAD first (lighter)
@@ -148,8 +150,11 @@ async def validate_url(
             ) as resp:
                 status_code = resp.status
         except Exception:
+            pass
+
+        # If HEAD succeeded, do a lightweight GET to check content for NSFW meta tags
+        if status_code == 200:
             try:
-                # Fallback to GET
                 async with session.get(
                     url,
                     timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
@@ -158,9 +163,35 @@ async def validate_url(
                     ssl=False,
                 ) as resp:
                     status_code = resp.status
+                    if resp.status == 200 and resp.content_type and "html" in resp.content_type:
+                        # Only read first 5KB — meta tags are always in <head>
+                        page_html = await resp.content.read(5000)
+                        page_html = page_html.decode("utf-8", errors="ignore")
+            except Exception as e:
+                logger.debug("GET fallback failed for %s: %s", url, e)
+
+        # If HEAD failed entirely, try GET as fallback
+        elif status_code is None:
+            try:
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+                    headers={"User-Agent": USER_AGENT},
+                    allow_redirects=True,
+                    ssl=False,
+                ) as resp:
+                    status_code = resp.status
+                    if resp.status == 200 and resp.content_type and "html" in resp.content_type:
+                        page_html = await resp.content.read(5000)
+                        page_html = page_html.decode("utf-8", errors="ignore")
             except Exception as e:
                 logger.debug("Validation failed for %s: %s", url, e)
                 status_code = None
+
+        # Layer 3: Check for adult content meta tags in HTML
+        if page_html and has_adult_meta_tags(page_html):
+            logger.debug("Blocked by adult meta tags: %s", url)
+            return None
 
         is_active = status_code == 200
         next_check = (
