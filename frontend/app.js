@@ -7,7 +7,7 @@
 const API_BASE = '/api';
 
 // Supabase client will be initialized after fetching config from backend
-let supabase = null;
+let supabaseClient = null;
 
 // ─── DOM Elements ───────────────────────────────────────────
 const randomBtn = document.getElementById('random-btn');
@@ -117,9 +117,9 @@ async function fetchStats() {
     console.warn('Failed to fetch stats:', err);
 
     // Fallback: query Supabase directly (if client available)
-    if (supabase) {
+    if (supabaseClient) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('stats')
           .select('active_count')
           .eq('id', 1)
@@ -137,11 +137,11 @@ async function fetchStats() {
 
 // ─── Realtime Subscription ──────────────────────────────────
 function setupRealtimeSubscription() {
-  if (!supabase) {
+  if (!supabaseClient) {
     console.log('Supabase client not available, skipping realtime');
     return;
   }
-  const channel = supabase
+  const channel = supabaseClient
     .channel('stats-realtime')
     .on(
       'postgres_changes',
@@ -194,8 +194,8 @@ randomBtn.addEventListener('click', async () => {
     }
 
     // API failed, try direct Supabase query (if client available)
-    if (supabase) {
-      const { data: websites, error } = await supabase
+    if (supabaseClient) {
+      const { data: websites, error } = await supabaseClient
         .rpc('get_random_active_website');
 
       if (!error && websites && websites.length > 0) {
@@ -246,8 +246,8 @@ async function performSearch(query) {
     }
 
     // Fallback to direct Supabase (if client available)
-    if (supabase) {
-      const { data, error } = await supabase
+    if (supabaseClient) {
+      const { data, error } = await supabaseClient
         .from('websites')
         .select('url, domain, is_active')
         .or(`url.ilike.%${query}%,domain.ilike.%${query}%`)
@@ -342,7 +342,7 @@ async function initApp() {
     if (resp.ok) {
       const config = await resp.json();
       if (config.supabase_url && config.supabase_key) {
-        supabase = window.supabase.createClient(config.supabase_url, config.supabase_key);
+        supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_key);
         console.log('Supabase client initialized from backend config');
       }
     }
