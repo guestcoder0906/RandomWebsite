@@ -21,6 +21,7 @@ from backend.workers.ct_log import run_ct_log_worker
 from backend.workers.common_crawl import run_common_crawl_importer
 from backend.workers.crawler import run_crawler
 from backend.workers.scheduler import run_scheduler
+from backend.workers.stats_updater import run_stats_updater
 
 # ─── Logging ─────────────────────────────────────────────────
 logging.basicConfig(
@@ -78,6 +79,9 @@ async def lifespan(app: FastAPI):
 
     # 6. Re-verification scheduler
     tasks.append(asyncio.create_task(run_scheduler(), name="scheduler"))
+
+    # 7. Stats Updater
+    tasks.append(asyncio.create_task(run_stats_updater(), name="stats_updater"))
 
     logger.info("All %d background workers launched", len(tasks))
 

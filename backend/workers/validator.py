@@ -273,10 +273,16 @@ async def run_validator():
                         break
 
                 if batch:
+                    # Deduplicate batch to prevent repeated work and upsert conflicts
+                    batch = list({item["url"]: item for item in batch}.values())
+                    
                     logger.info("Validating batch of %d URLs", len(batch))
                     records = await _process_batch(session, batch)
 
                     if records:
+                        # Deduplicate records by URL safely before bulk upsert
+                        records = list({r["url"]: r for r in records}.values())
+                        
                         # Bulk upsert to Supabase
                         try:
                             get_client().table("websites").upsert(

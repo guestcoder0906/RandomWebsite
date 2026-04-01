@@ -46,24 +46,12 @@ INSERT INTO stats (active_count, total_count) VALUES (0, 0)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
--- 3. TRIGGER — Auto-update stats on website changes
+-- 3. DROP TRIGGER — Auto-update stats on website changes
+-- This was removed as it causes O(N) indexing slow-downs and is instead 
+-- managed efficiently by a backend Python worker every 5 seconds.
 -- ============================================================
-CREATE OR REPLACE FUNCTION update_stats_count()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE stats SET
-    active_count = (SELECT count(*) FROM websites WHERE is_active = true),
-    total_count  = (SELECT count(*) FROM websites),
-    updated_at   = now()
-  WHERE id = 1;
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
 DROP TRIGGER IF EXISTS trg_update_stats ON websites;
-CREATE TRIGGER trg_update_stats
-  AFTER INSERT OR UPDATE OF is_active OR DELETE ON websites
-  FOR EACH STATEMENT EXECUTE FUNCTION update_stats_count();
+DROP FUNCTION IF EXISTS update_stats_count();
 
 -- ============================================================
 -- 4. FUNCTION — Optimized random active website
