@@ -4,12 +4,10 @@
  */
 
 // ─── Configuration ──────────────────────────────────────────
-const SUPABASE_URL = 'https://oyxgydfmaocqxictnmou.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_9l3BSqU-mIdYLEgZB2Pv2Q_UUZXU385';
 const API_BASE = '/api';
 
-// ─── Supabase Client ────────────────────────────────────────
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Supabase client will be initialized after fetching config from backend
+let supabase = null;
 
 // ─── DOM Elements ───────────────────────────────────────────
 const randomBtn = document.getElementById('random-btn');
@@ -104,25 +102,31 @@ async function fetchStats() {
   } catch (err) {
     console.warn('Failed to fetch stats:', err);
 
-    // Fallback: query Supabase directly
-    try {
-      const { data, error } = await supabase
-        .from('stats')
-        .select('active_count')
-        .eq('id', 1)
-        .single();
+    // Fallback: query Supabase directly (if client available)
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('stats')
+          .select('active_count')
+          .eq('id', 1)
+          .single();
 
-      if (!error && data) {
-        animateCounter(data.active_count);
+        if (!error && data) {
+          animateCounter(data.active_count);
+        }
+      } catch (e) {
+        console.warn('Supabase fallback also failed:', e);
       }
-    } catch (e) {
-      console.warn('Supabase fallback also failed:', e);
     }
   }
 }
 
 // ─── Realtime Subscription ──────────────────────────────────
 function setupRealtimeSubscription() {
+  if (!supabase) {
+    console.log('Supabase client not available, skipping realtime');
+    return;
+  }
   const channel = supabase
     .channel('stats-realtime')
     .on(
@@ -147,8 +151,8 @@ function setupRealtimeSubscription() {
     });
 }
 
-// Also poll every 30 seconds as a fallback
-setInterval(fetchStats, 30000);
+// Poll every 10 seconds for live counter updates
+setInterval(fetchStats, 10000);
 
 // ─── Random Button ──────────────────────────────────────────
 randomBtn.addEventListener('click', async () => {
@@ -175,18 +179,20 @@ randomBtn.addEventListener('click', async () => {
       }
     }
 
-    // API failed, try direct Supabase query
-    const { data: websites, error } = await supabase
-      .rpc('get_random_active_website');
+    // API failed, try direct Supabase query (if client available)
+    if (supabase) {
+      const { data: websites, error } = await supabase
+        .rpc('get_random_active_website');
 
-    if (!error && websites && websites.length > 0) {
-      btnText.textContent = 'Redirecting...';
-      setTimeout(() => {
-        window.open(websites[0].url, '_blank', 'noopener,noreferrer');
-        randomBtn.classList.remove('loading');
-        btnText.textContent = 'Take Me Somewhere Random';
-      }, 500);
-      return;
+      if (!error && websites && websites.length > 0) {
+        btnText.textContent = 'Redirecting...';
+        setTimeout(() => {
+          window.open(websites[0].url, '_blank', 'noopener,noreferrer');
+          randomBtn.classList.remove('loading');
+          btnText.textContent = 'Take Me Somewhere Random';
+        }, 500);
+        return;
+      }
     }
 
     showToast('No active websites found yet. The system is still indexing.', 'info');
@@ -225,16 +231,18 @@ async function performSearch(query) {
       return;
     }
 
-    // Fallback to direct Supabase
-    const { data, error } = await supabase
-      .from('websites')
-      .select('url, domain, is_active')
-      .or(`url.ilike.%${query}%,domain.ilike.%${query}%`)
-      .eq('is_active', true)
-      .limit(15);
+    // Fallback to direct Supabase (if client available)
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('websites')
+        .select('url, domain, is_active')
+        .or(`url.ilike.%${query}%,domain.ilike.%${query}%`)
+        .eq('is_active', true)
+        .limit(15);
 
-    if (!error && data) {
-      renderSearchResults(data);
+      if (!error && data) {
+        renderSearchResults(data);
+      }
     }
   } catch (err) {
     console.error('Search error:', err);
@@ -313,7 +321,23 @@ submitForm.addEventListener('submit', async (e) => {
 });
 
 // ─── Initialize ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+async function initApp() {
+  // Try to fetch Supabase config from backend
+  try {
+    const resp = await fetch(`${API_BASE}/config`);
+    if (resp.ok) {
+      const config = await resp.json();
+      if (config.supabase_url && config.supabase_key) {
+        supabase = window.supabase.createClient(config.supabase_url, config.supabase_key);
+        console.log('Supabase client initialized from backend config');
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch config, running API-only mode:', e);
+  }
+
   fetchStats();
   setupRealtimeSubscription();
-});
+}
+
+document.addEventListener('DOMContentLoaded', initApp);

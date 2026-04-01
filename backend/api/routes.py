@@ -16,6 +16,7 @@ from backend.db import (
     get_total_count,
     url_exists,
 )
+from backend.config import SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY
 from backend.workers.validator import enqueue_url
 
 logger = logging.getLogger("randomweb.api")
@@ -128,3 +129,12 @@ async def get_stats():
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@router.get("/config")
+async def get_config():
+    """Return frontend-safe Supabase config (publishable key only)."""
+    return {
+        "supabase_url": SUPABASE_URL,
+        "supabase_key": SUPABASE_PUBLISHABLE_KEY,
+    }

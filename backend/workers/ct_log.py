@@ -25,6 +25,11 @@ logger = logging.getLogger("randomweb.ct_log")
 _seen_domains: set = set()
 _MAX_SEEN_CACHE = 500_000
 
+# TLD diversity tracking — prevent any one TLD from flooding the index
+_tld_counts: dict[str, int] = {}
+_total_discovered = 0
+_MAX_TLD_RATIO = 0.20  # No single TLD can exceed 20% of total discoveries
+
 
 def _is_valid_domain(domain: str) -> bool:
     """Filter out invalid, wildcard, IP, and blocked TLD domains."""
@@ -77,6 +82,7 @@ def _deduplicate(domain: str) -> bool:
 
 async def _process_message(message: dict):
     """Process a single CertStream message and extract domains."""
+    global _total_discovered
     try:
         msg_type = message.get("message_type")
         if msg_type != "certificate_update":
@@ -98,6 +104,17 @@ async def _process_message(message: dict):
 
             if not _deduplicate(domain):
                 continue
+
+            # TLD diversity check — prevent any single TLD from flooding
+            tld = "." + domain.rsplit(".", 1)[-1] if "." in domain else ""
+            if tld and _total_discovered > 100:
+                tld_count = _tld_counts.get(tld, 0)
+                if tld_count / _total_discovered > _MAX_TLD_RATIO:
+                    continue  # Skip — this TLD is overrepresented
+
+            # Track TLD counts
+            _tld_counts[tld] = _tld_counts.get(tld, 0) + 1
+            _total_discovered += 1
 
             url = f"https://{domain}"
             await enqueue_url(url, source="ct_log")
