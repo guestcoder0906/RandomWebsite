@@ -4,10 +4,14 @@ FastAPI app with background workers for URL discovery, validation, and re-verifi
 """
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from backend.api.routes import router
 from backend.config import SEED_WEBSITES, SUPABASE_URL, SUPABASE_SECRET_KEY
@@ -25,6 +29,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("webroulette")
+
+# ─── Frontend Path ───────────────────────────────────────────
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 
 async def seed_top_websites():
@@ -101,5 +108,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount API routes
+# Mount API routes (MUST be before static files)
 app.include_router(router)
+
+# ─── Serve Frontend Static Files ────────────────────────────
+if FRONTEND_DIR.exists():
+    # Serve index.html for the root path
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+    # Catch-all: serve static files or fall back to index.html
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve static files or fall back to index.html for SPA routing."""
+        file_path = FRONTEND_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+    logger.info("Frontend serving enabled from: %s", FRONTEND_DIR)
+else:
+    logger.warning("Frontend directory not found at %s", FRONTEND_DIR)
