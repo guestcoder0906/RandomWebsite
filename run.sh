@@ -5,9 +5,8 @@ echo "=========================================="
 echo "  WebRoulette — Starting"
 echo "=========================================="
 
-# Railway and HF Spaces both respect the EXPOSE 7860 instruction in the Dockerfile
-# So we must listen exactly on 7860, otherwise Railway routes to the wrong port.
-APP_PORT="7860"
+# Set the port to 8000 as per user requirement
+APP_PORT="8000"
 echo "  Starting on port: $APP_PORT"
 
 cd /app

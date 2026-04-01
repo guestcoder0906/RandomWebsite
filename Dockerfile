@@ -21,6 +21,6 @@ RUN chmod +x /app/run.sh && chown -R appuser:appuser /app
 
 USER appuser
 
-EXPOSE 7860
+EXPOSE 8000
 
 CMD ["/app/run.sh"]
