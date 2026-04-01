@@ -2,8 +2,15 @@
 set -e
 
 echo "=========================================="
-echo "  RandomWeb — Starting services"
+echo "  WebRoulette — Starting services"
 echo "=========================================="
+
+# Determine the port (Railway uses PORT env var, HF Spaces uses 7860)
+export NGINX_PORT="${PORT:-7860}"
+echo "  Listening on port: $NGINX_PORT"
+
+# Substitute the port into nginx config
+envsubst '${NGINX_PORT}' < /etc/nginx/nginx.conf > /tmp/nginx-runtime.conf
 
 # Start FastAPI backend in background
 echo "[1/2] Starting FastAPI backend on :8000..."
@@ -20,6 +27,6 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Start Nginx in foreground
-echo "[2/2] Starting Nginx on :7860..."
-exec nginx -g 'daemon off;'
+# Start Nginx in foreground with the runtime config
+echo "[2/2] Starting Nginx on :$NGINX_PORT..."
+exec nginx -c /tmp/nginx-runtime.conf -g 'daemon off;'
