@@ -29,15 +29,22 @@ def get_client() -> Client:
         # Priority: Secret Key (for writes) -> Publishable Key (fallback)
         key = SUPABASE_SECRET_KEY or SUPABASE_PUBLISHABLE_KEY
         
+        if not SUPABASE_URL:
+            logger.critical("❌ SUPABASE_URL is empty! Set it as an environment variable.")
+            raise ValueError("SUPABASE_URL is not configured.")
+        
         if not key:
-            logger.critical("❌ No Supabase API key found!")
+            logger.critical("❌ No Supabase API key found! Set SUPABASE_SECRET_KEY or SUPABASE_PUBLISHABLE_KEY.")
             raise ValueError("SUPABASE_SECRET_KEY and SUPABASE_PUBLISHABLE_KEY are both empty.")
+        
+        logger.info("Supabase URL: %s (len=%d)", SUPABASE_URL, len(SUPABASE_URL))
+        logger.info("Using key: %s...%s (len=%d)", key[:12], key[-4:], len(key))
             
         _client = create_client(SUPABASE_URL, key)
         
         # Identify key type for debugging purposes
         key_type = "Managed (New)" if key.startswith("sb_") else "Legacy (JWT)"
-        logger.info("✅ Supabase client initialized (Type: %s) for %s", key_type, SUPABASE_URL)
+        logger.info("✅ Supabase client initialized (Type: %s)", key_type)
         
     return _client
 

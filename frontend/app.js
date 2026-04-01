@@ -29,6 +29,18 @@ let animationFrame = null;
 let searchDebounceTimer = null;
 
 // ─── Utility Functions ──────────────────────────────────────
+function openInNewTab(url) {
+  // Use a temporary anchor element — works reliably inside iframes
+  // where window.open() is blocked by sandbox/CSP
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function formatNumber(num) {
   if (num >= 1_000_000) {
     return (num / 1_000_000).toFixed(2) + 'M';
@@ -91,13 +103,15 @@ function animateCounter(target) {
   animationFrame = requestAnimationFrame(step);
 }
 
-// ─── Fetch Stats (Initial) ─────────────────────────────────
+// ─── Fetch Stats (Initial) ─────────────────────────────
 async function fetchStats() {
   try {
     const response = await fetch(`${API_BASE}/stats`);
     if (response.ok) {
       const data = await response.json();
-      animateCounter(data.active_count);
+      // Use active_count if > 0, otherwise show total_count as "indexing"
+      const displayCount = data.active_count || data.total_count || 0;
+      animateCounter(displayCount);
     }
   } catch (err) {
     console.warn('Failed to fetch stats:', err);
@@ -169,9 +183,9 @@ randomBtn.addEventListener('click', async () => {
       if (data.url) {
         btnText.textContent = 'Redirecting...';
 
-        // Small delay for visual feedback
+        // Use anchor element for reliable new-tab behavior inside iframes
         setTimeout(() => {
-          window.open(data.url, '_blank', 'noopener,noreferrer');
+          openInNewTab(data.url);
           randomBtn.classList.remove('loading');
           btnText.textContent = 'Take Me Somewhere Random';
         }, 500);
@@ -187,7 +201,7 @@ randomBtn.addEventListener('click', async () => {
       if (!error && websites && websites.length > 0) {
         btnText.textContent = 'Redirecting...';
         setTimeout(() => {
-          window.open(websites[0].url, '_blank', 'noopener,noreferrer');
+          openInNewTab(websites[0].url);
           randomBtn.classList.remove('loading');
           btnText.textContent = 'Take Me Somewhere Random';
         }, 500);
