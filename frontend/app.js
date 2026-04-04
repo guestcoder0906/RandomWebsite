@@ -89,14 +89,12 @@ function animateCounter(target) {
     currentCount = Math.round(startCount + diff * eased);
 
     counterValue.textContent = formatNumberFull(currentCount);
-    headerActiveCount.textContent = formatNumber(currentCount);
 
     if (progress < 1) {
       animationFrame = requestAnimationFrame(step);
     } else {
       currentCount = target;
       counterValue.textContent = formatNumberFull(target);
-      headerActiveCount.textContent = formatNumber(target);
     }
   }
 
@@ -109,9 +107,15 @@ async function fetchStats() {
     const response = await fetch(`${API_BASE}/stats`);
     if (response.ok) {
       const data = await response.json();
-      // Use active_count if > 0, otherwise show total_count as "indexing"
-      const displayCount = data.active_count || data.total_count || 0;
-      animateCounter(displayCount);
+      
+      // Update header with total indexed count (sites indexed)
+      if (data.total_count !== undefined) {
+        headerActiveCount.textContent = formatNumber(data.total_count);
+      }
+      
+      // Update footer with active count (animated)
+      const activeCount = data.active_count || 0;
+      animateCounter(activeCount);
     }
   } catch (err) {
     console.warn('Failed to fetch stats:', err);
@@ -121,11 +125,12 @@ async function fetchStats() {
       try {
         const { data, error } = await supabaseClient
           .from('stats')
-          .select('active_count')
+          .select('active_count, total_count')
           .eq('id', 1)
           .single();
 
         if (!error && data) {
+          headerActiveCount.textContent = formatNumber(data.total_count || data.active_count);
           animateCounter(data.active_count);
         }
       } catch (e) {
@@ -152,9 +157,15 @@ function setupRealtimeSubscription() {
         filter: 'id=eq.1',
       },
       (payload) => {
-        const newCount = payload.new.active_count;
-        if (newCount !== undefined && newCount !== targetCount) {
-          animateCounter(newCount);
+        const newActive = payload.new.active_count;
+        const newTotal = payload.new.total_count;
+        
+        if (newTotal !== undefined) {
+          headerActiveCount.textContent = formatNumber(newTotal);
+        }
+        
+        if (newActive !== undefined && newActive !== targetCount) {
+          animateCounter(newActive);
         }
       }
     )
