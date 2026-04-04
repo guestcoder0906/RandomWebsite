@@ -50,5 +50,5 @@ async def run_stats_updater():
         except Exception as e:
             logger.error("Stats updater error: %s", e)
 
-        # Wait 5 seconds
-        await asyncio.sleep(5)
+        # Wait 2 seconds for faster updates
+        await asyncio.sleep(2)

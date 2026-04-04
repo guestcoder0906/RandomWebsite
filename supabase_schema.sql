@@ -58,13 +58,37 @@ DROP FUNCTION IF EXISTS update_stats_count();
 -- ============================================================
 CREATE OR REPLACE FUNCTION get_random_active_website()
 RETURNS TABLE(id BIGINT, url TEXT, domain TEXT) AS $$
+DECLARE
+  max_id BIGINT;
+  random_id BIGINT;
 BEGIN
+  -- Get the current maximum ID
+  SELECT MAX(w.id) INTO max_id FROM websites w WHERE w.is_active = true;
+  
+  IF max_id IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Pick a random ID and find the next active row
+  -- This is O(log N) due to the index on ID
+  random_id := floor(random() * max_id);
+  
   RETURN QUERY
     SELECT w.id, w.url, w.domain
     FROM websites w
-    WHERE w.is_active = true
-    ORDER BY random()
+    WHERE w.id >= random_id AND w.is_active = true
+    ORDER BY w.id
     LIMIT 1;
+    
+  -- Fallback in case random_id was near the end and we missed the last active site
+  IF NOT FOUND THEN
+    RETURN QUERY
+      SELECT w.id, w.url, w.domain
+      FROM websites w
+      WHERE w.is_active = true
+      ORDER BY w.id DESC
+      LIMIT 1;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 

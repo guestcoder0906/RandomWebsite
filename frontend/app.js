@@ -77,7 +77,8 @@ function animateCounter(target) {
 
   const startCount = currentCount;
   const diff = target - startCount;
-  const duration = Math.min(1500, Math.max(300, Math.abs(diff) * 10));
+  // Faster, snappier animation
+  const duration = Math.min(800, Math.max(200, Math.abs(diff) * 5));
   const startTime = performance.now();
 
   function step(timestamp) {
@@ -176,8 +177,8 @@ function setupRealtimeSubscription() {
     });
 }
 
-// Poll every 10 seconds for live counter updates
-setInterval(fetchStats, 10000);
+// Poll every 5 seconds for live counter updates
+setInterval(fetchStats, 5000);
 
 // ─── Random Button ──────────────────────────────────────────
 randomBtn.addEventListener('click', async () => {

@@ -171,7 +171,7 @@ async def _crawl_page(
                     if len(body) > 5_000_000:  # 5MB limit
                         body = body[:5_000_000]
 
-                    soup = BeautifulSoup(body, "html.parser")
+                    soup = BeautifulSoup(body, "lxml")
                     links = soup.find_all("a", href=True)
 
                     count = 0
