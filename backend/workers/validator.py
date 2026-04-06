@@ -17,8 +17,6 @@ from backend.config import (
     USER_AGENT,
     REQUEST_TIMEOUT,
     VALIDATION_CONCURRENCY,
-    PER_DOMAIN_RATE_LIMIT,
-    CRAWL_DELAY_DEFAULT,
     RECHECK_INTERVAL_DAYS,
 )
 from backend.db import get_client, extract_domain
@@ -28,8 +26,6 @@ logger = logging.getLogger("randomweb.validator")
 
 # ─── Shared State ────────────────────────────────────────────
 _validation_queue: asyncio.Queue = asyncio.Queue(maxsize=50_000)
-_robots_cache: dict[str, Optional[Protego]] = {}
-_domain_limiters: dict[str, AsyncLimiter] = {}
 _semaphore: Optional[asyncio.Semaphore] = None
 
 
@@ -49,62 +45,7 @@ async def enqueue_url(url: str, source: str = "unknown"):
         logger.warning("Validation queue full, dropping: %s", url)
 
 
-def _get_domain_limiter(domain: str) -> AsyncLimiter:
-    """Get or create a per-domain rate limiter."""
-    if domain not in _domain_limiters:
-        _domain_limiters[domain] = AsyncLimiter(
-            PER_DOMAIN_RATE_LIMIT, 1.0
-        )
-    return _domain_limiters[domain]
 
-
-async def _fetch_robots_txt(
-    session: aiohttp.ClientSession, domain: str
-) -> Optional[Protego]:
-    """Fetch and parse robots.txt for a domain. Cached."""
-    if domain in _robots_cache:
-        return _robots_cache[domain]
-
-    robots_url = f"https://{domain}/robots.txt"
-    try:
-        async with session.get(
-            robots_url,
-            timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
-            headers={"User-Agent": USER_AGENT},
-            allow_redirects=True,
-            ssl=False,
-        ) as resp:
-            if resp.status == 200:
-                text = await resp.text()
-                parser = Protego.parse(text)
-                _robots_cache[domain] = parser
-                return parser
-    except Exception:
-        pass
-
-    _robots_cache[domain] = None
-    return None
-
-
-async def _can_fetch(
-    session: aiohttp.ClientSession, url: str
-) -> tuple[bool, float]:
-    """
-    Check if we're allowed to fetch a URL per robots.txt.
-    Returns (allowed, crawl_delay).
-    """
-    domain = extract_domain(url)
-    robots = await _fetch_robots_txt(session, domain)
-
-    if robots is None:
-        return True, CRAWL_DELAY_DEFAULT
-
-    allowed = robots.can_fetch(url, USER_AGENT)
-    delay = robots.crawl_delay(USER_AGENT)
-    if delay is None:
-        delay = CRAWL_DELAY_DEFAULT
-
-    return allowed, delay
 
 
 async def validate_url(
@@ -115,33 +56,33 @@ async def validate_url(
     """
     Validate a single URL. Returns a record dict if successful, else None.
     Steps:
-      1. Check robots.txt
-      2. Send HEAD request (fallback to GET)
-      3. Check for adult content meta tags
-      4. Return result with status
+      1. Send HEAD request (fallback to GET)
+      2. Check for adult content meta tags
+      3. Return result with status
     """
     domain = extract_domain(url)
-    limiter = _get_domain_limiter(domain)
 
-    # Rate limit per domain
-    async with limiter:
-        # Check robots.txt
-        allowed, delay = await _can_fetch(session, url)
-        if not allowed:
-            logger.debug("Blocked by robots.txt: %s", url)
-            return None
+    now = datetime.now(timezone.utc).isoformat()
+    status_code = None
+    page_html = None
 
-        # Respect crawl delay
-        if delay > 0:
-            await asyncio.sleep(delay)
+    try:
+        # Try HEAD first (lighter)
+        async with session.head(
+            url,
+            timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+            headers={"User-Agent": USER_AGENT},
+            allow_redirects=True,
+            ssl=False,
+        ) as resp:
+            status_code = resp.status
+    except Exception:
+        pass
 
-        now = datetime.now(timezone.utc).isoformat()
-        status_code = None
-        page_html = None
-
+    # If HEAD succeeded, do a lightweight GET to check content for NSFW meta tags
+    if status_code == 200:
         try:
-            # Try HEAD first (lighter)
-            async with session.head(
+            async with session.get(
                 url,
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
                 headers={"User-Agent": USER_AGENT},
@@ -149,68 +90,54 @@ async def validate_url(
                 ssl=False,
             ) as resp:
                 status_code = resp.status
-        except Exception:
-            pass
+                if resp.status == 200 and resp.content_type and "html" in resp.content_type:
+                    # Only read first 5KB — meta tags are always in <head>
+                    page_html = await resp.content.read(5000)
+                    page_html = page_html.decode("utf-8", errors="ignore")
+        except Exception as e:
+            logger.debug("GET fallback failed for %s: %s", url, e)
 
-        # If HEAD succeeded, do a lightweight GET to check content for NSFW meta tags
-        if status_code == 200:
-            try:
-                async with session.get(
-                    url,
-                    timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
-                    headers={"User-Agent": USER_AGENT},
-                    allow_redirects=True,
-                    ssl=False,
-                ) as resp:
-                    status_code = resp.status
-                    if resp.status == 200 and resp.content_type and "html" in resp.content_type:
-                        # Only read first 5KB — meta tags are always in <head>
-                        page_html = await resp.content.read(5000)
-                        page_html = page_html.decode("utf-8", errors="ignore")
-            except Exception as e:
-                logger.debug("GET fallback failed for %s: %s", url, e)
+    # If HEAD failed entirely, try GET as fallback
+    elif status_code is None:
+        try:
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+                headers={"User-Agent": USER_AGENT},
+                allow_redirects=True,
+                ssl=False,
+            ) as resp:
+                status_code = resp.status
+                if resp.status == 200 and resp.content_type and "html" in resp.content_type:
+                    page_html = await resp.content.read(5000)
+                    page_html = page_html.decode("utf-8", errors="ignore")
+        except Exception as e:
+            logger.debug("Validation failed for %s: %s", url, e)
+            status_code = None
 
-        # If HEAD failed entirely, try GET as fallback
-        elif status_code is None:
-            try:
-                async with session.get(
-                    url,
-                    timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
-                    headers={"User-Agent": USER_AGENT},
-                    allow_redirects=True,
-                    ssl=False,
-                ) as resp:
-                    status_code = resp.status
-                    if resp.status == 200 and resp.content_type and "html" in resp.content_type:
-                        page_html = await resp.content.read(5000)
-                        page_html = page_html.decode("utf-8", errors="ignore")
-            except Exception as e:
-                logger.debug("Validation failed for %s: %s", url, e)
-                status_code = None
+    # Layer 3: Check for adult content meta tags in HTML
+    if page_html and has_adult_meta_tags(page_html):
+        logger.debug("Blocked by adult meta tags: %s", url)
+        return None
 
-        # Layer 3: Check for adult content meta tags in HTML
-        if page_html and has_adult_meta_tags(page_html):
-            logger.debug("Blocked by adult meta tags: %s", url)
-            return None
+    is_active = status_code == 200
+    next_check = (
+        (datetime.now(timezone.utc) + timedelta(days=RECHECK_INTERVAL_DAYS)).isoformat()
+        if is_active
+        else None
+    )
 
-        is_active = status_code == 200
-        next_check = (
-            (datetime.now(timezone.utc) + timedelta(days=RECHECK_INTERVAL_DAYS)).isoformat()
-            if is_active
-            else None
-        )
+    record = {
+        "url": url,
+        "domain": domain,
+        "source": source,
+        "status": status_code,
+        "is_active": is_active,
+        "last_checked": now,
+        "next_check": next_check,
+    }
 
-        record = {
-            "url": url,
-            "domain": domain,
-            "source": source,
-            "status": status_code,
-            "is_active": is_active,
-            "last_checked": now,
-            "next_check": next_check,
-        }
-
-        return record
+    return record
 
 
 async def _process_batch(
