@@ -5,6 +5,7 @@ to continuously expand the known network graph.
 """
 import asyncio
 import logging
+import random
 import re
 from collections import deque
 from typing import Optional
@@ -196,25 +197,55 @@ async def _crawl_page(
             return discovered
 
 
-async def seed_from_database():
-    """Load existing active URLs from database as crawler seeds."""
+async def seed_from_database() -> int:
+    """Load random existing active URLs from database as crawler seeds."""
+    added = 0
     try:
+        client = get_client()
+        
+        # Get approx max ID to pick a random starting point
+        max_res = client.table("websites").select("id").order("id", desc=True).limit(1).execute()
+        max_id = max_res.data[0]["id"] if max_res.data else 0
+        
+        if max_id == 0:
+            return 0
+            
+        random_id = random.randint(1, max_id)
+        
         result = (
-            get_client()
+            client
             .table("websites")
             .select("url")
             .eq("is_active", True)
+            .gte("id", random_id)
             .limit(1000)
             .execute()
         )
+        
+        # Fallback if random_id was near the end
+        if result.data is not None and len(result.data) < 100:
+            extra = (
+                client
+                .table("websites")
+                .select("url")
+                .eq("is_active", True)
+                .limit(1000 - len(result.data))
+                .execute()
+            )
+            if extra.data:
+                result.data.extend(extra.data)
+
         if result.data:
             for row in result.data:
                 url = row["url"]
                 if url not in _visited:
                     _crawl_queue.append({"url": url, "depth": 0})
-            logger.info("Seeded crawler with %d URLs from database", len(result.data))
+                    added += 1
+            logger.info("Seeded crawler with %d URLs from database (%d new to queue)", len(result.data), added)
+        return added
     except Exception as e:
         logger.error("Failed to seed from database: %s", e)
+        return 0
 
 
 async def run_crawler():
@@ -243,8 +274,15 @@ async def run_crawler():
             try:
                 if not _crawl_queue:
                     # Re-seed periodically
-                    await seed_from_database()
-                    if not _crawl_queue:
+                    added = await seed_from_database()
+                    if added == 0:
+                        # If we couldn't add any seeds, it likely means _visited is full
+                        # of all the seeds we attempted to add. To break out of this 
+                        # starvation loop, we must clear _visited and try again.
+                        if len(_visited) > 10000:
+                            logger.info("Crawler stuck, clearing _visited cache to restart exploration...")
+                            _visited.clear()
+                            
                         logger.debug("Crawler queue empty, waiting...")
                         await asyncio.sleep(60)
                         continue
